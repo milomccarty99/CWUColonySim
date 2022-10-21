@@ -1,0 +1,4 @@
+g++ CWUColonySim.cpp
+./a.out 2 3 10 20
+rm a.out
+
