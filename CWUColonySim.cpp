@@ -134,17 +134,18 @@ void* active_team_member(void* arg)
 	{
 		team_flag = 'b';
 	}
-	while (true) // boolean value controlled by supervisor thread
+	while (!game_finished) // boolean value controlled by supervisor thread
 	{
 		int k = rand() % rows;
 		int j = rand() % columns;
 		pthread_mutex_lock(&lock);
 		change_field_map_state = try_fire_missile(k, j, team_flag) || change_field_map_state; // if the missle was success or if the map is already changed
 		pthread_mutex_unlock(&lock);
-		int wait_time = rand() % 3 + 1; // random int 1 - 3
+		int wait_time = rand() % 3 + 1 ; // random int 1 - 3
 		this_thread::sleep_for(chrono::seconds(wait_time));
 
 	}
+	return NULL;
 }
 bool try_deploy_team_member(int i, int j, char team)
 {
