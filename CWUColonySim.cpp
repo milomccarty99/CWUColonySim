@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <random>
 #include <time.h>
+#include <algorithm>
 // team = 'A' or 'B'
 // team_flag = 'a' or 'b'
 
@@ -58,6 +59,51 @@ void reset_field_map()
 		}
 	}
 }
+//after location i,j is already 'hit', this method is called
+void missile_vicinity(int i, int j, char team_flag)
+{
+	char team;
+	if (team_flag == 'a')
+		team = 'A';
+	else
+		team = 'B';
+
+	int min_row = min(0, i - 1);
+	int max_row = max(rows - 1, i + 1);
+	int min_column = min(0, j - 1);
+	int max_column = max(columns - 1, j + 1);
+	
+	int number_locations = (max_row - min_row) * (max_column - min_column);
+	int positive_flag_count = 0;
+	for (int u = min_row; u < max_row; u++)
+	{
+		for (int v = min_column; v < max_column; v++)
+		{
+			char current_location = field_map[u * columns + v];
+			if (current_location == team || current_location == team_flag)
+			{
+				positive_flag_count++;
+			}
+		}
+	}
+	if ((positive_flag_count * 2) >= number_locations) // if there is a majority
+	{
+		// do not touch location i,j
+		// do not touch team members 'A' or 'B'
+		for (int u = min_row; u < max_row; u++)
+		{
+			for (int v = min_column; v < max_column; v++)
+			{
+				char current_location = field_map[u * columns + v];
+				bool can_flag_location = (u != i || v != j) && (current_location != 'A' && current_location != 'B');
+				if (can_flag_location)
+				{
+					field_map[u * columns + v] = team_flag;
+				}
+			}
+		}
+	}
+}
 bool try_fire_missile(int i, int j, char team_flag)
 {
 	char location_oc = field_map[i * columns + j];
@@ -65,16 +111,15 @@ bool try_fire_missile(int i, int j, char team_flag)
 	{
 		return false;
 	}
-	if (location_oc == team_flag)
+	if (location_oc == team_flag) // if already occupied by team 
 	{
-		field_map[i * columns + j] = 'u'; // u for unoccupied
-		// test change surrounding territory
+		field_map[i * columns + j] = 'u'; // becomes unoccupied
 	}
 	else
 	{
 		field_map[i * columns + j] = team_flag;
-		// test change surrounding territory
 	}
+	missile_vicinity(i, j, team_flag);
 	return true;
 }
 void* active_team_member(void* arg)
@@ -113,15 +158,31 @@ bool try_deploy_team_member(int i, int j, char team)
 	pthread_create(&tid, NULL, active_team_member, (void*)(long)team);
 	return true;
 }
-bool check_game_finished() // naive implementation
+bool check_game_finished() 
 {
+	char winning_char;
 	for (int i = 0; i < rows; i++)
 	{
 		for (int j = 0; j < columns; j++)
 		{
-			if (field_map[i * columns + j] == 'u')
+			char current_char = field_map[i * columns + j];
+			if (current_char == 'A' || current_char == 'B')
 			{
-				return false;
+				//skip
+			}
+			else
+			{
+				if (winning_char == '\0') // if it is the default char
+				{
+					winning_char = current_char;
+				}
+				else
+				{
+					if (winning_char != current_char)
+					{
+						return false;
+					}
+				}
 			}
 		}
 	}
