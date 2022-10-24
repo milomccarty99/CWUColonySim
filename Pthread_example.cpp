@@ -1,5 +1,7 @@
 #include <iostream>
 #include <pthread.h>
+#include <thread>
+#include <chrono>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -12,6 +14,7 @@ pthread_mutex_t lock;
 
 void* trythis(void* arg)
 {
+    //std::this_thread::sleep_for(chrono::seconds(5));
     pthread_mutex_lock(&lock);
 
     unsigned long i = 0;
@@ -51,7 +54,7 @@ int main(void)
     {
         pthread_join(tid[i], NULL);
     }
-    pthread_mutex_destroy(&lock);
+    pthread_mutex_destroy(&lock); //cleans up resources, lock still effects other thread usage
 
     return 0;
 }

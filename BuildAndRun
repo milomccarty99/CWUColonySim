@@ -1,4 +1,3 @@
-g++ CWUColonySim.cpp -pthread -Wall ;
-./a.out 2 3 10 20 ;
-rm a.out ;
-
+g++ CWUColonySim.cpp -pthread -Wall -o Lab3;
+./Lab3 2 3 10 20 ;
+rm Lab3 ;
