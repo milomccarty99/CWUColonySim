@@ -2,6 +2,7 @@
 #include <fstream>
 #include <pthread.h>
 #include <thread>
+
 #include <chrono>
 #include <string>
 #include <stdlib.h>
@@ -20,6 +21,7 @@ ofstream output_file;
 pthread_mutex_t lock;
 bool change_field_map_state; // updating screen view on change
 bool game_finished = false;
+bool verbose = true;
 
 //returns the console color code corresponding to team char
 string occupied_color(char c)
@@ -67,7 +69,7 @@ void reset_field_map()
 //outputs the contents of field_map to file map.bin
 void output_binary_file()
 {
-	output_file.open("map.txt");
+	output_file.open("map.bin");
 
 	for (int i = 0; i < rows; i++)
 	{
@@ -146,10 +148,17 @@ bool try_fire_missile(int i, int j, char team_flag)
 	return true;
 }
 
+//a struct for passing info into pthread active_team_member
+struct Team_Member_Info {
+	int i, j;
+	char c;
+};
+
 // soldier thread for after soldier is deployed. soldier shoots missile and waits 1-3 seconds before firing again
 void* active_team_member(void* arg)
 {
-	char team = *((char*) &arg);
+	struct Team_Member_Info *tmi = (Team_Member_Info*)arg;
+	char team = tmi->c;
 	char team_flag;
 	if (team == 'A')
 	{
@@ -162,10 +171,14 @@ void* active_team_member(void* arg)
 	while (!game_finished) // boolean value controlled by supervisor thread
 	{
 		int k = rand() % rows;
-		int j = rand() % columns;
+		int l = rand() % columns;
 		pthread_mutex_lock(&lock);
+		if (verbose)
+		{
+			cout << team << " at " << tmi->i << ", " << tmi->j << " firing at location " << k << ", " << l << endl;
+		}
 		// if the missle was success or if the map is already changed
-		change_field_map_state = try_fire_missile(k, j, team_flag) || change_field_map_state; 
+		change_field_map_state = try_fire_missile(k, l, team_flag) || change_field_map_state; 
 		pthread_mutex_unlock(&lock);
 		int wait_time = rand() % 3 + 1 ; // random int 1 - 3
 		this_thread::sleep_for(chrono::seconds(wait_time));
@@ -173,6 +186,8 @@ void* active_team_member(void* arg)
 	}
 	return NULL;
 }
+
+
 
 // tries to deploy a team member returns true if successful, false otherwise
 bool try_deploy_team_member(int i, int j, char team)
@@ -183,8 +198,13 @@ bool try_deploy_team_member(int i, int j, char team)
 		return false;
 	}
 	field_map[i * columns + j] = team;
+	struct Team_Member_Info* tmi;
+	tmi = (Team_Member_Info*)malloc(sizeof(struct Team_Member_Info));
+	(*tmi).i = i;
+	(*tmi).j = j;
+	(*tmi).c = team;
 	pthread_t tid;
-	pthread_create(&tid, NULL, active_team_member, (void*)(long)team);
+	pthread_create(&tid, NULL, active_team_member, (void*)tmi);
 	return true;
 }
 
@@ -225,16 +245,16 @@ void* supervisor(void* arg)
 {
 	while (!game_finished)
 	{
-		pthread_mutex_lock(&lock);
 		if (change_field_map_state)
 		{
+			pthread_mutex_lock(&lock);
 			game_finished = check_game_finished();
 			change_field_map_state = false;
 			system("clear");
 			display_field_map();
 			output_binary_file();
+			pthread_mutex_unlock(&lock);
 		}
-		pthread_mutex_unlock(&lock);
 	}
 	return NULL;
 }
