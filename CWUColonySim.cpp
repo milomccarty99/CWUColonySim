@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <pthread.h>
 #include <thread>
 #include <chrono>
@@ -20,6 +21,7 @@ int T1, T2, rows, columns;
 pthread_mutex_t lock;
 bool change_field_map_state; // updating screen view on change
 bool game_finished = false;
+ofstream output_file;
 
 
 string occupied_color(char c)
@@ -58,6 +60,21 @@ void reset_field_map()
 			field_map[i * columns + j] = 'u';
 		}
 	}
+}
+
+void output_binary_file()
+{
+	output_file.open("mapstate.bin");
+
+	for (int i = 0; i < rows; i++)
+	{
+		for (int j = 0; j < columns; j++)
+		{
+			output_file << field_map[i * columns + j];
+		}
+		output_file << "\n";
+	}
+	output_file.close();
 }
 //after location i,j is already 'hit', this method is called
 void missile_vicinity(int i, int j, char team_flag)
@@ -200,6 +217,7 @@ void* supervisor(void* arg)
 			//update binary file TODO
 			system("clear");
 			display_field_map();
+			output_binary_file();
 		}
 		pthread_mutex_unlock(&lock);
 	}
