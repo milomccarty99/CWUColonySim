@@ -14,31 +14,31 @@
 // team_flag = 'a' or 'b'
 
 using namespace std;
-pthread_t tid[10];
-int counter = 0;
-char* field_map;
 int T1, T2, rows, columns;
+char* field_map;
+ofstream output_file;
 pthread_mutex_t lock;
 bool change_field_map_state; // updating screen view on change
 bool game_finished = false;
-ofstream output_file;
 
-
+//returns the console color code corresponding to team char
 string occupied_color(char c)
 {
 	if (c == 'a' || c == 'A')
 	{
-		return "\033[1;41m";
+		return "\033[1;41m"; //red
 	}
 	else if (c == 'b' || c == 'B')
 	{
-		return "\033[1;44m";
+		return "\033[1;44m"; //blue
 	}
 	else
 	{
-		return "\033[1;m";
+		return "\033[1;m"; //default
 	}
 }
+
+// output the field_map in a graphical way
 void display_field_map()
 {
 	for (int i = 0; i < rows; i++)
@@ -51,6 +51,8 @@ void display_field_map()
 		cout << endl;
 	}
 }
+
+// clears field_map to be unoccupied
 void reset_field_map()
 {
 	for (int i = 0; i < rows; i++)
@@ -62,9 +64,10 @@ void reset_field_map()
 	}
 }
 
+//outputs the contents of field_map to file map.bin
 void output_binary_file()
 {
-	output_file.open("mapstate.bin");
+	output_file.open("map.txt");
 
 	for (int i = 0; i < rows; i++)
 	{
@@ -76,6 +79,7 @@ void output_binary_file()
 	}
 	output_file.close();
 }
+
 //after location i,j is already 'hit', this method is called
 void missile_vicinity(int i, int j, char team_flag)
 {
@@ -121,6 +125,8 @@ void missile_vicinity(int i, int j, char team_flag)
 		}
 	}
 }
+
+//tries location i,j and returns true if there is a 'hit'
 bool try_fire_missile(int i, int j, char team_flag)
 {
 	char location_oc = field_map[i * columns + j];
@@ -139,6 +145,8 @@ bool try_fire_missile(int i, int j, char team_flag)
 	missile_vicinity(i, j, team_flag);
 	return true;
 }
+
+// soldier thread for after soldier is deployed. soldier shoots missile and waits 1-3 seconds before firing again
 void* active_team_member(void* arg)
 {
 	char team = *((char*) &arg);
@@ -156,7 +164,8 @@ void* active_team_member(void* arg)
 		int k = rand() % rows;
 		int j = rand() % columns;
 		pthread_mutex_lock(&lock);
-		change_field_map_state = try_fire_missile(k, j, team_flag) || change_field_map_state; // if the missle was success or if the map is already changed
+		// if the missle was success or if the map is already changed
+		change_field_map_state = try_fire_missile(k, j, team_flag) || change_field_map_state; 
 		pthread_mutex_unlock(&lock);
 		int wait_time = rand() % 3 + 1 ; // random int 1 - 3
 		this_thread::sleep_for(chrono::seconds(wait_time));
@@ -164,6 +173,8 @@ void* active_team_member(void* arg)
 	}
 	return NULL;
 }
+
+// tries to deploy a team member returns true if successful, false otherwise
 bool try_deploy_team_member(int i, int j, char team)
 {
 	char location = field_map[i * columns + j];
@@ -176,6 +187,8 @@ bool try_deploy_team_member(int i, int j, char team)
 	pthread_create(&tid, NULL, active_team_member, (void*)(long)team);
 	return true;
 }
+
+// true if a win condition has been reached, false otherwise
 bool check_game_finished() 
 {
 	char winning_char;
@@ -186,7 +199,7 @@ bool check_game_finished()
 			char current_char = field_map[i * columns + j];
 			if (current_char == 'A' || current_char == 'B')
 			{
-				//skip
+				// team member location does not count
 			}
 			else
 			{
@@ -206,6 +219,8 @@ bool check_game_finished()
 	}
 	return true;
 }
+
+// supervisor thread mainly checking if the game has completed or not
 void* supervisor(void* arg)
 {
 	while (!game_finished)
@@ -215,7 +230,6 @@ void* supervisor(void* arg)
 		{
 			game_finished = check_game_finished();
 			change_field_map_state = false;
-			//update binary file TODO
 			system("clear");
 			display_field_map();
 			output_binary_file();
@@ -225,48 +239,12 @@ void* supervisor(void* arg)
 	return NULL;
 }
 
-int main(int argc, char** argv)
+// deploy team A and B with valid locations
+void deploy_teams()
 {
-	//to do:
-	// continue simulation from file
-	srand(time(NULL)); // initialize seed for rand()
-	if (argc != 5)
-	{
-		cout << "improper arguments given" << endl;
-		return -1;
-	}
-	try
-	{
-		T1 = stoi(argv[1]);
-		T2 = stoi(argv[2]);
-		rows = stoi(argv[3]);
-		columns = stoi(argv[4]);
-
-	}
-	catch (exception &err)
-	{
-		cout << "something went wrong with the given arguments" << endl;
-		return -1;
-	}
-	cout << T1 << "  " << T2 << "  " << rows  << "  " <<  columns << endl; // display arguments for sanity
-
-	if ((T1 + T2) > (rows * columns))
-	{
-		cout << "soldeir error: more than the maximum allowed" << endl; 
-		return -1;
-	}
-	if (T1 <= 0 || T2 <= 0)
-	{
-		cout << "not enough troops provided" << endl;
-	}
-	field_map = (char*)malloc(sizeof(char) * rows * columns);
-	pthread_mutex_init(&lock, NULL);
-	reset_field_map();
-	
-	//display_field_map();
 	//deploy team a
 	int t = 0;
-	while (t<T1)
+	while (t < T1)
 	{
 		int i = rand() % rows;
 		int j = rand() % columns;
@@ -286,17 +264,49 @@ int main(int argc, char** argv)
 			t++;
 		}
 	}
+}
 
+// main
+int main(int argc, char** argv)
+{
+	srand(time(NULL)); // initialize seed for rand()
+	if (argc != 5)
+	{
+		cout << "improper arguments given" << endl;
+		return -1;
+	}
+	try // try catch for user input
+	{
+		T1 = stoi(argv[1]);
+		T2 = stoi(argv[2]);
+		rows = stoi(argv[3]);
+		columns = stoi(argv[4]);
+	}
+	catch (exception &err)
+	{
+		cout << "something is wrong with the given arguments" << endl;
+		return -1;
+	}
+	cout << T1 << "  " << T2 << "  " << rows  << "  " <<  columns << endl; // display arguments for sanity
 
-	display_field_map();
-	
+	if ((T1 + T2) > (rows * columns))
+	{
+		cout << "soldier error: more than the maximum allowed" << endl; 
+		return -1;
+	}
+	if (T1 <= 0 || T2 <= 0)
+	{
+		cout << "not enough troops provided" << endl;
+	}
+	field_map = (char*)malloc(sizeof(char) * rows * columns);
+	pthread_mutex_init(&lock, NULL);
+	reset_field_map();
+	deploy_teams();
+	//create and join supervisor thread
 	pthread_t tid;
 	pthread_create(&tid, NULL, supervisor, NULL); // might add boolean flag for what supervisor should look for
 	pthread_join(tid, NULL);
-
-
-	// destroy after threads using lock are created
-
+	//end of main
 	pthread_mutex_destroy(&lock);
 	return 0;
 }
