@@ -2,7 +2,6 @@
 #include <fstream>
 #include <pthread.h>
 #include <thread>
-
 #include <chrono>
 #include <string>
 #include <stdlib.h>
@@ -173,14 +172,14 @@ void* active_team_member(void* arg)
 		int k = rand() % rows;
 		int l = rand() % columns;
 		pthread_mutex_lock(&lock);
-		if (verbose)
+		if (verbose && !game_finished)
 		{
 			cout << team << " at " << tmi->i << ", " << tmi->j << " firing at location " << k << ", " << l << endl;
 		}
 		// if the missle was success or if the map is already changed
 		change_field_map_state = try_fire_missile(k, l, team_flag) || change_field_map_state; 
 		pthread_mutex_unlock(&lock);
-		int wait_time = rand() % 3 + 1 ; // random int 1 - 3
+		int wait_time = rand() % 3 + 1; // random int 1 - 3
 		this_thread::sleep_for(chrono::seconds(wait_time));
 
 	}
@@ -190,7 +189,7 @@ void* active_team_member(void* arg)
 
 
 // tries to deploy a team member returns true if successful, false otherwise
-bool try_deploy_team_member(int i, int j, char team)
+bool try_deploy_team_member(int i, int j, char team, pthread_t tid)
 {
 	char location = field_map[i * columns + j];
 	if (location != 'u')
@@ -203,7 +202,6 @@ bool try_deploy_team_member(int i, int j, char team)
 	(*tmi).i = i;
 	(*tmi).j = j;
 	(*tmi).c = team;
-	pthread_t tid;
 	pthread_create(&tid, NULL, active_team_member, (void*)tmi);
 	return true;
 }
@@ -216,30 +214,61 @@ bool check_game_finished()
 	{
 		for (int j = 0; j < columns; j++)
 		{
-			char current_char = field_map[i * columns + j];
-			if (current_char == 'A' || current_char == 'B')
-			{
-				// team member location does not count
-			}
-			else
-			{
-				if (winning_char == '\0') // if it is the default char
-				{
-					winning_char = current_char;
-				}
-				else
-				{
-					if (winning_char != current_char)
-					{
-						return false;
-					}
-				}
-			}
+			
+			char currentChar = field_map[i * columns + j];
+			if (currentChar == 'u')
+				return false;
 		}
 	}
 	return true;
 }
 
+char calculate_winning_team()
+{
+	int aCount = 0;
+	int bCount = 0;
+	for (int i = 0; i < rows; i++)
+	{
+		for (int j = 0; j < columns; j++)
+		{
+			char currentChar = field_map[i * columns + j];
+			if (currentChar == 'A' || currentChar == 'a')
+			{
+				aCount++;
+			}
+			else if (currentChar == 'B' || currentChar == 'b')
+			{
+				bCount++;
+			}
+		}
+	}
+
+	if (aCount > bCount)
+	{
+		return 'A';
+	}
+	else if (bCount > aCount)
+	{
+		return 'B';
+	}
+	else
+	{
+		return 'T';
+	}
+}
+
+void display_winning_team()
+{
+	char winningTeam = calculate_winning_team();
+	if (winningTeam == 'T')
+	{
+		cout << "It is a tie." << endl;
+	}
+	else
+	{
+		cout << "Team " << winningTeam << " has won." << endl;
+	}
+}
 // supervisor thread mainly checking if the game has completed or not
 void* supervisor(void* arg)
 {
@@ -260,7 +289,7 @@ void* supervisor(void* arg)
 }
 
 // deploy team A and B with valid locations
-void deploy_teams()
+void deploy_teams(pthread_t tid[])
 {
 	//deploy team a
 	int t = 0;
@@ -268,7 +297,7 @@ void deploy_teams()
 	{
 		int i = rand() % rows;
 		int j = rand() % columns;
-		if (try_deploy_team_member(i, j, 'A')) // set this to random value
+		if (try_deploy_team_member(i, j, 'A', tid[t])) // set this to random value
 		{
 			t++;
 		}
@@ -279,7 +308,7 @@ void deploy_teams()
 	{
 		int i = rand() % rows;
 		int j = rand() % columns;
-		if (try_deploy_team_member(i, j, 'B')) // set this to random value
+		if (try_deploy_team_member(i, j, 'B', tid[t + T1])) // set this to random value
 		{
 			t++;
 		}
@@ -321,11 +350,14 @@ int main(int argc, char** argv)
 	field_map = (char*)malloc(sizeof(char) * rows * columns);
 	pthread_mutex_init(&lock, NULL);
 	reset_field_map();
-	deploy_teams();
+	int numTeamMemberThreads = T1 + T2;
+	pthread_t tid[numTeamMemberThreads];
+	deploy_teams(tid);
 	//create and join supervisor thread
-	pthread_t tid;
-	pthread_create(&tid, NULL, supervisor, NULL); // might add boolean flag for what supervisor should look for
-	pthread_join(tid, NULL);
+	pthread_t superTid;
+	pthread_create(&superTid, NULL, supervisor, NULL); 
+	pthread_join(superTid, NULL);
+	display_winning_team();
 	//end of main
 	pthread_mutex_destroy(&lock);
 	return 0;
